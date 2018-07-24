@@ -1,0 +1,235 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "scalesetName": {
+      "type": "string",
+      "metadata": {
+        "description": ""
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": ""
+      }
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": ""
+      }
+    },
+    "instanceType": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
+      "metadata": {
+        "description": ""
+      }
+    },
+    "instanceCount": {
+      "type": "int",
+      "defaultValue": 1,
+      "metadata": {
+        "description": ""
+      }
+    },
+    "vnetResourceGroup": {
+      "type": "string",
+      "metadata": {
+        "description": "The names of the resource group the VNET is defined in."
+      }
+    },
+    "vnetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the virtual network."
+      }
+    },
+    "subNetName": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the subnet to deploy the server into."
+      }
+    },
+    "vstsAccount": {
+      "type": "string",
+      "metadata": {
+        "description": ""
+      }
+    },
+    "pat": {
+      "type": "securestring",
+      "metadata": {
+        "description": ""
+      }
+    },
+    "agentPool": {
+      "type": "string",
+      "metadata": {
+        "description": ""
+      }
+    }
+  },
+  "variables": {
+    "location": "[resourceGroup().location]",
+    "timezone": "GMT Standard Time",
+    "lbName": "[concat(parameters('scalesetName'), '-lb')]",
+    "msi": "[concat(parameters('scalesetName'), '-msi')]",
+    "subnetId": "[resourceId(parameters('vnetResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subNetName'))]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Network/loadBalancers",
+      "name": "[variables('lbName')]",
+      "location": "[variables('location')]",
+      "comments": "An internal loadbalancer used for RDP access to the scale-set.",
+      "dependsOn": [],
+      "tags": {},
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "InternalEndpoint",
+            "properties": {
+              "subnet": {
+                "id": "[variables('subnetId')]"
+              },
+              "privateIPAllocationMethod": "Dynamic"
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "agentpool"
+          }
+        ],
+        "inboundNatPools": [
+          {
+            "name": "RDP",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[resourceId('Microsoft.Network/loadBalancers/frontendIPConfigurations', variables('lbName'), 'InternalEndpoint')]"
+              },
+              "frontendPortRangeStart": 50001,
+              "frontendPortRangeEnd": 51000,
+              "backendPort": 3389,
+              "protocol": "Tcp"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('msi')]",
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2015-08-31-PREVIEW",
+      "location": "[variables('location')]",
+      "comments": "The Manage Service Identity to use for the VMs"
+    },
+    {
+      "apiVersion": "2018-06-01",
+      "type": "Microsoft.Compute/virtualMachineScaleSets",
+      "name": "[parameters('scalesetName')]",
+      "location": "[variables('location')]",
+      "comments": "The VM Scale-set for a scalable build agent pool.",
+      "dependsOn": [
+        "[concat('Microsoft.Network/loadBalancers/', variables('lbName'))]",
+        "[concat('Microsoft.ManagedIdentity/userAssignedIdentities/', variables('msi'))]"
+      ],
+      "tags": {},
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('msi'))]": {}
+        }
+      },
+      "properties": {
+        "overprovision": false,
+        "upgradePolicy": {
+          "mode": "Automatic"
+        },
+        "virtualMachineProfile": {
+          "extensionProfile": {
+            "extensions": [
+              {
+                "name": "UpdateDocker",
+                "properties": {
+                  "publisher": "Microsoft.Compute",
+                  "type": "CustomScriptExtension",
+                  "typeHandlerVersion": "1.9",
+                  "autoUpgradeMinorVersion": true,
+                  "settings": {
+                    "fileUris": [
+                      "https://raw.githubusercontent.com/askew/windows-semi-annual-vsts-agent/master/ConfigureAgent.ps1"
+                    ]
+                  },
+                  "protectedSettings": {
+                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File \".\\vsts\\ConfigureAgent.ps1\" -vstsAccount ', parameters('vstsAccount'), ' -pat \"', parameters('pat'), '\" -agentPool \"', parameters('agentPool'), '\"')]"
+                  }
+                }
+              }
+            ]
+          },
+          "networkProfile": {
+            "networkInterfaceConfigurations": [
+              {
+                "name": "networkconfig",
+                "properties": {
+                  "ipConfigurations": [
+                    {
+                      "name": "ipconfig",
+                      "properties": {
+                        "loadBalancerBackendAddressPools": [
+                          {
+                            "id": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', variables('lbName'), 'agentpool')]"
+                          }
+                        ],
+                        "subnet": {
+                          "id": "[variables('subnetId')]"
+                        },
+                        "loadBalancerInboundNatPools": [
+                          {
+                            "id": "[resourceId('Microsoft.Network/loadBalancers/inboundNatPools', variables('lbName'), 'RDP')]"
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "primary": true
+                }
+              }
+            ]
+          },
+          "osProfile": {
+            "adminPassword": "[parameters('adminPassword')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "computernamePrefix": "[parameters('scalesetName')]",
+            "windowsConfiguration": {
+              "provisionVMAgent": true,
+              "enableAutomaticUpdates": true,
+              "timeZone": "[variables('timezone')]"
+            }
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "MicrosoftWindowsServer",
+              "offer": "WindowsServerSemiAnnual",
+              "sku": "Datacenter-Core-1803-with-Containers-smalldisk",
+              "version": "latest"
+            },
+            "osDisk": {
+              "createOption": "FromImage"
+            }
+          }
+        }
+      },
+      "sku": {
+        "name": "[parameters('instanceType')]",
+        "capacity": "[parameters('instanceCount')]",
+        "tier": "Standard"
+      }
+    },
+  ],
+  "outputs": {}
+}
