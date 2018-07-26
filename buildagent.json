@@ -5,7 +5,7 @@
     "scalesetName": {
       "type": "string",
       "metadata": {
-        "description": ""
+        "description": "The name for the VM Scale-set. will also be used a a prefix for the LB and MSI."
       }
     },
     "windowsBuild": {
@@ -14,38 +14,41 @@
         "1709",
         "1803"
       ],
-      "defaultValue": "1803"
+      "defaultValue": "1803",
+      "metadata": {
+        "description": "The version of the Windows Server. Currently 1709 or 1803."
+      }
     },
     "adminUsername": {
       "type": "string",
       "metadata": {
-        "description": ""
+        "description": "The username for the admin account on the VMs"
       }
     },
     "adminPassword": {
       "type": "securestring",
       "metadata": {
-        "description": ""
+        "description": "The password for the admin account"
       }
     },
     "instanceType": {
       "type": "string",
       "defaultValue": "Standard_B2s",
       "metadata": {
-        "description": ""
+        "description": "The VM size to use. See http://aka.ms/vmspecs"
       }
     },
     "instanceCount": {
       "type": "int",
       "defaultValue": 1,
       "metadata": {
-        "description": ""
+        "description": "The number of VMs to deploy in the Scale-set"
       }
     },
     "vnetResourceGroup": {
       "type": "string",
       "metadata": {
-        "description": "The names of the resource group the VNET is defined in."
+        "description": "The name of the resource group the VNet is defined in."
       }
     },
     "vnetName": {
@@ -63,19 +66,19 @@
     "vstsAccount": {
       "type": "string",
       "metadata": {
-        "description": ""
+        "description": "The name of the VSTS account to use."
       }
     },
     "pat": {
       "type": "securestring",
       "metadata": {
-        "description": ""
+        "description": "The Personal Access Token used to authenticate with VSTS."
       }
     },
     "agentPool": {
       "type": "string",
       "metadata": {
-        "description": ""
+        "description": "The name of the agent pool to register the build agents with."
       }
     }
   },
