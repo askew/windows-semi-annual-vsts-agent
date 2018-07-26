@@ -1,12 +1,20 @@
 {
   "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
-  "contentVersion": "1.0.0.0",
+  "contentVersion": "0.1.0.0",
   "parameters": {
     "scalesetName": {
       "type": "string",
       "metadata": {
         "description": ""
       }
+    },
+    "windowsBuild": {
+      "type": "string",
+      "allowedValues": [
+        "1709",
+        "1803"
+      ],
+      "defaultValue": "1803"
     },
     "adminUsername": {
       "type": "string",
@@ -76,7 +84,11 @@
     "timezone": "GMT Standard Time",
     "lbName": "[concat(parameters('scalesetName'), '-lb')]",
     "msi": "[concat(parameters('scalesetName'), '-msi')]",
-    "subnetId": "[resourceId(parameters('vnetResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subNetName'))]"
+    "subnetId": "[resourceId(parameters('vnetResourceGroup'), 'Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subNetName'))]",
+    "osSku": {
+      "1709": "Datacenter-Core-1709-with-Containers-smalldisk",
+      "1803": "Datacenter-Core-1803-with-Containers-smalldisk"
+    }
   },
   "resources": [
     {
@@ -153,7 +165,7 @@
           "extensionProfile": {
             "extensions": [
               {
-                "name": "UpdateDocker",
+                "name": "InstallVSTSAgent",
                 "properties": {
                   "publisher": "Microsoft.Compute",
                   "type": "CustomScriptExtension",
@@ -165,7 +177,7 @@
                     ]
                   },
                   "protectedSettings": {
-                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File \".\\vsts\\ConfigureAgent.ps1\" -vstsAccount ', parameters('vstsAccount'), ' -pat \"', parameters('pat'), '\" -agentPool \"', parameters('agentPool'), '\"')]"
+                    "commandToExecute": "[concat('powershell.exe -ExecutionPolicy Unrestricted -File \".\\ConfigureAgent.ps1\" -vstsAccount ', parameters('vstsAccount'), ' -pat \"', parameters('pat'), '\" -agentPool \"', parameters('agentPool'), '\"')]"
                   }
                 }
               }
@@ -215,7 +227,7 @@
             "imageReference": {
               "publisher": "MicrosoftWindowsServer",
               "offer": "WindowsServerSemiAnnual",
-              "sku": "Datacenter-Core-1803-with-Containers-smalldisk",
+              "sku": "[variables('osSku')[parameters('windowsBuild')]]",
               "version": "latest"
             },
             "osDisk": {
